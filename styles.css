@@ -1,0 +1,267 @@
+:root {
+    --studio-text: #f5f2ff;
+    --studio-muted: #bdb8cf;
+    --studio-border: #373447;
+    --studio-panel: #191b2a;
+    --studio-purple: #332655;
+    --studio-focus: #d6c6ff;
+}
+
+[data-testid="stAppViewContainer"] {
+    background: radial-gradient(ellipse at 15% 0%, #211935, transparent 55%),
+                radial-gradient(ellipse at 100% 80%, #1b1930, transparent 55%),
+                #10121d;
+}
+
+[data-testid="stHeader"] {
+    height: auto;
+    background: transparent;
+    pointer-events: none;
+}
+
+[data-testid="stToolbar"] {
+    pointer-events: auto;
+}
+
+[data-testid="stMainBlockContainer"],
+[data-testid="stBottomBlockContainer"] {
+    box-sizing: border-box;
+    padding-right: clamp(14px, 4vw, 32px);
+    padding-left: clamp(14px, 4vw, 32px);
+}
+
+[data-testid="stMainBlockContainer"] {
+    padding-top: clamp(1rem, 3vh, 2rem);
+    padding-bottom: 1.5rem;
+}
+
+[data-testid="stBottomBlockContainer"] {
+    padding-block: .75rem max(1rem, env(safe-area-inset-bottom));
+}
+
+.st-key-studio-header,
+.st-key-studio-transcript,
+.st-key-studio-composer {
+    max-width: 100%;
+    margin-inline: auto;
+}
+
+.st-key-studio-header {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    min-height: 68px;
+    padding: 10px 14px;
+    border: 1px solid var(--studio-border);
+    border-radius: 15px;
+    background: #1b1b2b;
+}
+
+.studio-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.studio-brand h1 {
+    margin: 0;
+    padding: 0;
+    color: var(--studio-text);
+    font-size: 1.13rem;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.studio-mark {
+    display: grid;
+    min-width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid #67548d;
+    border-radius: 11px;
+    background: linear-gradient(145deg, #4e3a78, #33274f);
+    color: #f2e8ff;
+    font-size: 1.2rem;
+}
+
+.st-key-studio-welcome {
+    align-items: center;
+    padding: clamp(2.5rem, 12vh, 7rem) .25rem 2.5rem;
+    text-align: center;
+}
+
+.studio-welcome-title {
+    margin: 0;
+    padding: 0;
+    color: var(--studio-text);
+    font-size: clamp(1.55rem, 3.8vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -.025em;
+    line-height: 1.3;
+    text-align: center;
+}
+
+.st-key-studio-welcome [data-testid="stCaptionContainer"] p {
+    text-align: center;
+}
+
+.st-key-studio-welcome [data-testid="stCaptionContainer"] p,
+.st-key-attachment-card [data-testid="stCaptionContainer"] p,
+.st-key-studio-transcript [data-testid="stCaptionContainer"] p {
+    color: var(--studio-muted);
+}
+
+.st-key-studio-suggestions {
+    justify-content: center;
+}
+
+.st-key-studio-header button,
+.st-key-studio-suggestions button,
+.st-key-studio-input-row button,
+.st-key-attachment-card button {
+    min-height: 44px;
+}
+
+.st-key-studio-suggestions button {
+    border-color: var(--studio-border);
+    border-radius: 12px;
+    background: var(--studio-panel);
+    color: var(--studio-text);
+}
+
+.st-key-studio-transcript [data-testid="stChatMessage"] {
+    gap: clamp(8px, 2vw, 14px);
+    padding: 12px 14px;
+    border: 1px solid var(--studio-border);
+    border-radius: 16px;
+    background: var(--studio-panel);
+}
+
+.st-key-studio-transcript [data-testid="stChatMessageContent"] {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.st-key-studio-transcript [data-testid="stChatMessageContent"] p {
+    line-height: 1.65;
+}
+
+[class*="st-key-user-turn-"] [data-testid="stChatMessage"] {
+    flex-direction: row-reverse;
+    width: fit-content;
+    max-width: min(100%, 640px);
+    margin-inline-start: auto;
+    border-color: #574374;
+    border-end-end-radius: 5px;
+    background: var(--studio-purple);
+}
+
+[class*="st-key-assistant-turn-"] [data-testid="stChatMessage"] {
+    border-end-start-radius: 5px;
+}
+
+.st-key-studio-transcript [data-testid="stMarkdownContainer"] pre,
+.st-key-studio-transcript [data-testid="stMarkdownContainer"] table {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.st-key-studio-transcript [data-testid="stMarkdownContainer"] table {
+    display: block;
+}
+
+.st-key-studio-transcript [data-testid="stText"] pre,
+.st-key-attachment-card [data-testid="stText"] pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.st-key-studio-transcript [data-testid="stExpander"] [data-testid="stText"] pre {
+    max-height: 20rem;
+    overflow-y: auto;
+}
+
+[class*="st-key-user-turn-"] [data-testid="stText"] {
+    color: #e2d7ff;
+}
+
+[class*="st-key-answer-actions-"] {
+    gap: 4px;
+}
+
+[class*="st-key-answer-actions-"] button {
+    min-height: 44px;
+}
+
+.st-key-studio-composer {
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--studio-border);
+    border-radius: 16px;
+    background: #1b1b2b;
+    box-shadow: 0 5px 24px #0004;
+}
+
+.st-key-studio-input-row {
+    gap: 8px;
+    min-width: 0;
+}
+
+.st-key-studio-input-row [data-testid="stChatInput"] {
+    min-width: 0;
+}
+
+.st-key-studio-input-row textarea {
+    font-size: 16px;
+}
+
+.st-key-studio-input-row [data-testid="stChatInputSubmitButton"]:not(:disabled) {
+    color: #201735;
+}
+
+.st-key-attachment-card {
+    padding: 6px 10px;
+    border: 1px solid #52436b;
+    border-radius: 11px;
+    background: #252039;
+}
+
+.st-key-attachment-card [data-testid="stText"] {
+    font-weight: 600;
+}
+
+.st-key-attachment-card > [data-testid="stVerticalBlock"] {
+    min-width: min(100%, 210px);
+    flex: 1 1 210px;
+    gap: 2px;
+}
+
+:is(.st-key-studio-header, .st-key-studio-transcript, .st-key-studio-composer) :focus-visible:not(textarea) {
+    outline: 2px solid var(--studio-focus);
+    outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+    .st-key-studio-header {
+        min-height: 60px;
+        padding-inline: 10px;
+    }
+
+    .st-key-studio-composer {
+        padding: 7px;
+    }
+
+    .st-key-studio-transcript [data-testid="stChatMessage"] {
+        padding: 10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-testid="stAppViewContainer"] *,
+    [data-testid="stAppViewContainer"] *::before,
+    [data-testid="stAppViewContainer"] *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0s !important;
+        animation-duration: 0s !important;
+    }
+}
