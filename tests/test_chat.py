@@ -1,4 +1,6 @@
 import io
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +16,7 @@ from streamlit.testing.v1 import AppTest
 
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
+sys.path.insert(0, str(APP_PATH.parent))
 
 
 def make_app():
@@ -22,10 +25,11 @@ def make_app():
     return app
 
 
-def chunks(*texts):
+def chunks(*texts, finish_reason="stop"):
     return iter(
-        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=text))])
-        for text in texts
+        [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=text), finish_reason=None)])
+         for text in texts]
+        + [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None), finish_reason=finish_reason)])]
     )
 
 
@@ -95,6 +99,82 @@ class ChatAppTest(unittest.TestCase):
         self.assertEqual([m.value for m in app.markdown].count("Retry this question"), 1)
         self.assertIn("Recovered answer", [m.value for m in app.markdown])
 
+    def test_new_chat_keeps_previous_conversation_after_reload(self):
+        self.create.return_value = chunks("Archived answer")
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"AI_STUDIO_HISTORY_DB": str(Path(directory) / "history.sqlite3")}
+        ), patch("conversation_history.browser_owner", return_value="a" * 64):
+            app = make_app().run()
+            app.chat_input[0].set_value("First conversation").run()
+            next(button for button in app.button if button.label == "새 대화").click().run()
+            self.assertNotIn("Archived answer", [message.value for message in app.markdown])
+
+            reopened = make_app().run()
+            next(button for button in reopened.button if button.label == "First conversation").click().run()
+            self.assertIn("Archived answer", [message.value for message in reopened.markdown])
+
+    def test_another_tab_cannot_restore_a_deleted_record(self):
+        self.create.side_effect = [chunks("Private answer"), chunks("Another answer")]
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"AI_STUDIO_HISTORY_DB": str(Path(directory) / "history.sqlite3")}
+        ), patch("conversation_history.browser_owner", return_value="a" * 64):
+            app = make_app().run()
+            app.chat_input[0].set_value("Deleted conversation").run()
+            other = make_app().run()
+            next(button for button in other.button if button.label == "Deleted conversation").click().run()
+            next(button for button in app.button if button.label == "현재 대화 삭제").click().run()
+
+            other.chat_input[0].set_value("Old tab still open").run()
+            reopened = make_app().run()
+            self.assertNotIn("Deleted conversation", [button.label for button in reopened.button])
+
+    def test_settings_use_the_selected_providers_key_and_model(self):
+        from openai import OpenAI
+
+        providers = (
+            ("OpenAI", "https://api.openai.com/v1", "max_completion_tokens"),
+            ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "max_tokens"),
+        )
+        for provider, endpoint, token_parameter in providers:
+            with self.subTest(provider=provider):
+                self.create.return_value = chunks("Provider answer")
+                app = make_app().run()
+                app.radio(key="settings_provider").set_value(provider).run()
+                next(field for field in app.text_input if field.label == "API 키").set_value(f"offline-{provider}-key")
+                next(field for field in app.text_input if field.label == "텍스트 모델").set_value("custom-text-model")
+                next(widget for widget in app.selectbox if widget.label == "답변 언어").select("한국어")
+                next(button for button in app.button if button.label == "설정 적용").click().run()
+                app.chat_input[0].set_value("Hello").run()
+
+                self.assertEqual(OpenAI.call_args.kwargs["api_key"], f"offline-{provider}-key")
+                self.assertEqual(OpenAI.call_args.kwargs["base_url"], endpoint)
+                self.assertEqual(self.create.call_args.kwargs["model"], "custom-text-model")
+                self.assertEqual(self.create.call_args.kwargs[token_parameter], 3_000)
+                self.assertIn("Korean", self.create.call_args.kwargs["messages"][0]["content"])
+
+    def test_length_limited_answer_continues_in_the_same_turn(self):
+        self.create.side_effect = [chunks("Part one.", finish_reason="length"), chunks(" Part two.")]
+        app = make_app().run()
+        app.chat_input[0].set_value("Write a long answer").run()
+        next(button for button in app.button if button.label == "답변 이어쓰기").click().run()
+        self.assertIn("Part one. Part two.", [message.value for message in app.markdown])
+        self.assertEqual(len(app.session_state["turns"]), 1)
+        self.assertIn({"role": "assistant", "content": "Part one."}, self.create.call_args.kwargs["messages"])
+
+    def test_interrupted_network_stream_keeps_the_received_text(self):
+        def broken_stream():
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Partial"), finish_reason=None)])
+            raise httpx.ReadError("connection closed")
+
+        self.create.return_value = broken_stream()
+        app = make_app().run()
+        app.chat_input[0].set_value("Wait for the response").run()
+
+        self.assertFalse(app.exception)
+        self.assertTrue(app.error)
+        self.assertIn("Partial", [message.value for message in app.markdown])
+        self.assertIn("답변 이어쓰기", [button.label for button in app.button])
+
     def test_failed_replacement_does_not_send_previous_document(self):
         good = SimpleNamespace(name="old.txt", getvalue=lambda: b"PRIVATE-OLD-TEXT")
         bad = SimpleNamespace(name="new.txt", getvalue=lambda: b"\xff")
@@ -143,6 +223,19 @@ class AttachmentTest(unittest.TestCase):
         self.assertIn("Moonlight Project", attachment.sources[0].text)
         with self.assertRaises(AttachmentError):
             parse_attachment("scan.pdf", pdf_bytes())
+
+    def test_mixed_pdf_reports_pages_skipped_due_to_missing_text(self):
+        from chat_service import parse_attachment
+
+        writer = PdfWriter()
+        writer.append(io.BytesIO(pdf_bytes("Readable first page")))
+        writer.add_blank_page(width=300, height=300)
+        output = io.BytesIO()
+        writer.write(output)
+        attachment = parse_attachment("mixed.pdf", output.getvalue())
+        self.assertEqual(attachment.total_pages, 2)
+        self.assertEqual(attachment.unreadable_pages, (2,))
+        self.assertTrue(attachment.truncated)
 
     def test_docx_extracts_table_content_and_image_type_is_detected(self):
         from chat_service import parse_attachment

@@ -56,6 +56,20 @@
     background: #1b1b2b;
 }
 
+.st-key-history-identity {
+    display: none;
+}
+
+.st-key-studio-header [data-testid="stHtml"] {
+    flex: 1 1 auto;
+}
+
+.st-key-studio-navigation {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+
 .studio-brand {
     display: flex;
     align-items: center;
@@ -139,6 +153,7 @@
 
 .st-key-studio-transcript [data-testid="stChatMessageContent"] {
     min-width: 0;
+    max-width: 80ch;
     overflow-wrap: anywhere;
 }
 
@@ -179,6 +194,14 @@
 .st-key-studio-transcript [data-testid="stExpander"] [data-testid="stText"] pre {
     max-height: 20rem;
     overflow-y: auto;
+}
+
+.st-key-studio-transcript [id^="studio-source-"] {
+    scroll-margin-block: 1rem;
+}
+
+.st-key-studio-transcript [id^="studio-source-"]:focus {
+    border-top: 2px solid var(--studio-focus);
 }
 
 [class*="st-key-user-turn-"] [data-testid="stText"] {
@@ -245,6 +268,8 @@
     .st-key-studio-header {
         min-height: 60px;
         padding-inline: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .st-key-studio-composer {

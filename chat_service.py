@@ -35,6 +35,7 @@ class AttachmentError(ValueError):
 class Source:
     label: str
     text: str
+    page: int | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,10 @@ class Attachment:
     image: bytes | None = None
     mime_type: str | None = None
     dimensions: tuple[int, int] | None = None
+    total_pages: int | None = None
+    unreadable_pages: tuple[int, ...] = ()
+    limit_reached: bool = False
+    partial_page: int | None = None
 
 
 @dataclass
@@ -53,14 +58,18 @@ class Turn:
     attachment: Attachment | None = None
     answer: str = ""
     error: str | None = None
+    status: str = "complete"
 
 
 def _read_pdf(data):
     reader = PdfReader(io.BytesIO(data))
     if reader.is_encrypted:
         raise AttachmentError("비밀번호로 보호된 PDF입니다. 잠금을 해제한 파일을 선택해 주세요.")
-    for page, content in enumerate(reader.pages, start=1):
-        yield Source(f"{page}쪽", content.extract_text() or "")
+    pages = reader.pages
+    return len(pages), (
+        Source(f"{number}쪽", page.extract_text() or "", page=number)
+        for number, page in enumerate(pages, start=1)
+    )
 
 
 def _read_docx(data):
@@ -102,21 +111,30 @@ def parse_attachment(name, data):
     try:
         if extension in IMAGE_TYPES:
             return _read_image(name, data)
-        readers = {"pdf": _read_pdf, "docx": _read_docx}
+        total_pages = None
+        unreadable_pages = []
+        if extension == "pdf":
+            total_pages, passages = _read_pdf(data)
+        else:
+            passages = _read_docx(data) if extension == "docx" else _read_text(data)
         sources = []
         remaining = MAX_DOCUMENT_CHARS
-        truncated = False
-        for source in readers.get(extension, _read_text)(data):
+        limit_reached = False
+        partial_page = None
+        for source in passages:
             text = source.text.strip()
             if not text:
+                if source.page is not None:
+                    unreadable_pages.append(source.page)
                 continue
             if len(sources) == MAX_SOURCES or remaining == 0:
-                truncated = True
+                limit_reached = True
                 break
-            sources.append(Source(source.label, text[:remaining]))
+            sources.append(Source(source.label, text[:remaining], page=source.page))
             remaining -= min(len(text), remaining)
             if remaining == 0 and len(sources[-1].text) < len(text):
-                truncated = True
+                limit_reached = True
+                partial_page = source.page
                 break
     except AttachmentError:
         raise
@@ -128,7 +146,11 @@ def parse_attachment(name, data):
 
     if not sources:
         raise AttachmentError("읽을 수 있는 텍스트가 없습니다. 스캔 PDF라면 텍스트 인식 후 다시 첨부해 주세요.")
-    return Attachment(name, tuple(sources), truncated)
+    return Attachment(
+        name, tuple(sources), limit_reached or bool(unreadable_pages),
+        total_pages=total_pages, unreadable_pages=tuple(unreadable_pages), limit_reached=limit_reached,
+        partial_page=partial_page,
+    )
 
 
 def _recent_messages(history):
@@ -148,8 +170,12 @@ def _recent_messages(history):
     return messages
 
 
-def build_request(turn, history, text_model=TEXT_MODEL, vision_model=VISION_MODEL):
-    instructions = "You are AI Studio. Answer in the language of the user's question and use readable Markdown."
+def build_request(turn, history, text_model=TEXT_MODEL, vision_model=VISION_MODEL, *,
+                  language="", length="", continuation=""):
+    answer_language = language or "the language of the user's question"
+    instructions = f"You are AI Studio. Answer in {answer_language} and use readable Markdown."
+    if length:
+        instructions += f" {length}"
     attachment = turn.attachment
     model = text_model
     content = turn.question
@@ -180,6 +206,11 @@ def build_request(turn, history, text_model=TEXT_MODEL, vision_model=VISION_MODE
 
     messages = [{"role": "system", "content": instructions}, *_recent_messages(history)]
     messages.append({"role": "user", "content": content})
+    if continuation:
+        messages.extend([
+            {"role": "assistant", "content": continuation},
+            {"role": "user", "content": "Continue the preceding answer exactly from where it ends. Do not repeat it."},
+        ])
     return model, messages
 
 
@@ -191,3 +222,17 @@ def cited_sources(attachment, answer):
         for index in indices
         if 0 < index <= len(attachment.sources)
     ]
+
+
+def citation_links(answer, references, turn_index):
+    numbers = {number for number, _ in references}
+    pattern = r"`+[^`]*`+|(?:\[|【|［)([0-9０-９]{1,3})(?:\]|】|］)(?!\(|:|\[(?![0-9]{1,3}\]))"
+
+    def link(match):
+        number = match.group(1)
+        if not number or int(number) not in numbers:
+            return match.group(0)
+        number = int(number)
+        return rf"[\[{number}\]](#studio-source-{turn_index}-{number})"
+
+    return re.sub(pattern, link, answer)
